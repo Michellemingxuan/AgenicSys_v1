@@ -85,14 +85,20 @@ class DataGenerator:
         else:
             raise ValueError(f"Unknown dtype: {dtype}")
 
+    def _get_case_count(self) -> int:
+        """Derive case count from one-row-per-case tables."""
+        for profile in self.profiles.values():
+            if profile.get("one_row_per_case", False):
+                return profile["row_count"]
+        return 50  # fallback
+
     def _gen_string(self, spec: dict, n: int, profile: dict) -> list:
         fmt = spec["format"]
         one_row = profile.get("one_row_per_case", False)
         if one_row:
             return [fmt.format(seq=i + 1) for i in range(n)]
         else:
-            # For multi-row tables, cycle through 50 case IDs
-            case_count = 50
+            case_count = self._get_case_count()
             return [fmt.format(seq=(i % case_count) + 1) for i in range(n)]
 
     def _gen_int(self, spec: dict, n: int, rng: np.random.Generator) -> list:
