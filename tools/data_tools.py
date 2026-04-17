@@ -1,4 +1,8 @@
-"""Data-access tool functions for agent tool-calling."""
+"""Data-access tool functions for agent tool-calling.
+
+All queries are scoped to the currently active case. The case_id is set on the
+gateway at session start — tools don't need to specify it.
+"""
 
 from __future__ import annotations
 
@@ -21,13 +25,22 @@ def init_tools(gateway: DataGateway, catalog: DataCatalog) -> None:
 
 
 def list_available_tables() -> str:
+    """List all data tables available for the current case."""
     if _catalog is None:
         return "Data unavailable"
     tables = _catalog.list_tables()
+    if _gateway is not None:
+        case_id = _gateway.get_case_id()
+        if case_id:
+            # Show only tables that exist for this case
+            case_tables = _gateway.list_tables()
+            header = f"Tables for case {case_id}:\n"
+            return header + "\n".join(case_tables) if case_tables else header + "No tables available"
     return "\n".join(tables) if tables else "No tables available"
 
 
 def get_table_schema(table_name: str) -> str:
+    """Get the column schema for a specific table."""
     if _catalog is None:
         return "Data unavailable"
     schema = _catalog.get_schema(table_name)
@@ -42,6 +55,7 @@ def query_table(
     filter_value: str = "",
     limit: int = 50,
 ) -> str:
+    """Query a data table for the current case. All data is scoped to the active case."""
     if _gateway is None:
         return "Data unavailable"
 
@@ -51,9 +65,12 @@ def query_table(
 
     rows = _gateway.query(table_name, filters=filters, limit=limit)
     if rows is None:
-        return "Data unavailable"
+        return f"Data unavailable: table '{table_name}' not found for current case."
 
-    text = json.dumps(rows, indent=2)
+    if not rows:
+        return f"No rows matching filter in '{table_name}'."
+
+    text = json.dumps(rows, indent=2, default=str)
     if len(text) > _MAX_CHARS:
         text = text[:_MAX_CHARS] + "\n... (truncated)"
     return text

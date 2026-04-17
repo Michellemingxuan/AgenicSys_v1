@@ -114,21 +114,17 @@ def mock_firewall(logger):
 
 def test_full_pipeline_smoke(mock_firewall, logger, tmp_path):
     """Full pipeline: team construction -> specialist dispatch -> compare -> synthesize -> format."""
-    # Data setup
+    # Data setup — per-case gateway
     gen = DataGenerator(seed=42)
     gen.load_profiles()
     tables_raw = gen.generate_all()
 
-    tables: dict[str, list[dict]] = {}
-    for table_name, cols in tables_raw.items():
-        col_names = list(cols.keys())
-        n = len(next(iter(cols.values())))
-        rows = []
-        for i in range(n):
-            rows.append({c: cols[c][i] for c in col_names})
-        tables[table_name] = rows
+    gateway = SimulatedDataGateway.from_generated(tables_raw)
+    # Set a case for the test
+    case_ids = gateway.list_case_ids()
+    assert len(case_ids) > 0
+    gateway.set_case(case_ids[0])
 
-    gateway = SimulatedDataGateway(tables)
     catalog = DataCatalog()
     init_tools(gateway, catalog)
 

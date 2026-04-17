@@ -127,6 +127,12 @@ def main():
         default=42,
         help="Random seed for data generation (default: 42)",
     )
+    parser.add_argument(
+        "--case-id",
+        type=str,
+        default=None,
+        help="Case ID to review (e.g. CASE-00001). If omitted, lists available cases.",
+    )
 
     args = parser.parse_args()
 
@@ -139,24 +145,37 @@ def main():
     adapter = build_adapter(args)
     firewall = FirewallStack(adapter, logger)
 
-    # Data generation
+    # Data generation — organized per case
     gen = DataGenerator(seed=args.seed)
     gen.load_profiles()
     tables_raw = gen.generate_all()
 
-    # Convert to row-oriented format for SimulatedDataGateway
-    tables: dict[str, list[dict]] = {}
-    for table_name, cols in tables_raw.items():
-        col_names = list(cols.keys())
-        n = len(next(iter(cols.values())))
-        rows = []
-        for i in range(n):
-            rows.append({c: cols[c][i] for c in col_names})
-        tables[table_name] = rows
-
-    gateway = SimulatedDataGateway(tables)
+    # Build per-case gateway from generated data
+    gateway = SimulatedDataGateway.from_generated(tables_raw)
     catalog = DataCatalog()
     init_tools(gateway, catalog)
+
+    # Case selection
+    available_cases = gateway.list_case_ids()
+    if not available_cases:
+        print("No cases available. Check data generation.")
+        sys.exit(1)
+
+    case_id = args.case_id
+    if case_id is None:
+        print(f"\nAvailable cases ({len(available_cases)} total):")
+        for cid in available_cases[:10]:
+            print(f"  {cid}")
+        if len(available_cases) > 10:
+            print(f"  ... and {len(available_cases) - 10} more")
+        case_id = available_cases[0]
+        print(f"\nNo --case-id specified, using: {case_id}")
+    elif case_id not in available_cases:
+        print(f"Case '{case_id}' not found. Available: {', '.join(available_cases[:5])}...")
+        sys.exit(1)
+
+    gateway.set_case(case_id)
+    logger.log("case_selected", {"case_id": case_id, "tables": gateway.list_tables()})
 
     # Pillar config
     pillar_loader = PillarLoader()

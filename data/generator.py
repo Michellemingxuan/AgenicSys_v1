@@ -210,7 +210,7 @@ class DataGenerator:
     # ------------------------------------------------------------------
 
     def dump_csv(self, output_dir: str) -> list[str]:
-        """Write all generated tables to CSV files. Returns list of file paths."""
+        """Write all generated tables to CSV files (flat layout). Returns list of file paths."""
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
         paths = []
@@ -224,6 +224,51 @@ class DataGenerator:
                 for i in range(n):
                     writer.writerow([cols[c][i] for c in col_names])
             paths.append(str(path))
+        return paths
+
+    def dump_csv_per_case(self, output_dir: str) -> list[str]:
+        """Write tables organized by case folder: output_dir/{case_id}/{table}.csv.
+
+        Each case folder contains only the rows belonging to that case.
+        For one_row_per_case tables: the single row (without case_id column).
+        For multi-row tables: all rows matching that case_id (without case_id column).
+        """
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+
+        # Collect all case IDs from any table that has a case_id column
+        case_ids: set[str] = set()
+        for cols in self._tables.values():
+            if "case_id" in cols:
+                case_ids.update(cols["case_id"])
+
+        paths = []
+        for case_id in sorted(case_ids):
+            case_dir = out / case_id
+            case_dir.mkdir(parents=True, exist_ok=True)
+
+            for table_name, cols in self._tables.items():
+                col_names = list(cols.keys())
+                n = len(next(iter(cols.values())))
+
+                if "case_id" not in cols:
+                    continue
+
+                # Find row indices for this case
+                indices = [i for i in range(n) if cols["case_id"][i] == case_id]
+                if not indices:
+                    continue
+
+                # Write CSV without case_id column (it's implicit from the folder)
+                data_cols = [c for c in col_names if c != "case_id"]
+                path = case_dir / f"{table_name}.csv"
+                with open(path, "w", newline="") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(data_cols)
+                    for i in indices:
+                        writer.writerow([cols[c][i] for c in data_cols])
+                paths.append(str(path))
+
         return paths
 
 
