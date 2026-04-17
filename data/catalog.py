@@ -1,4 +1,9 @@
-"""Data catalog backed by YAML profile definitions."""
+"""Data catalog backed by YAML profile definitions.
+
+The catalog is the single source of truth for what data is available.
+Specialists use it to understand what tables and columns exist.
+The Text-to-SQL skill (future) reads it to resolve semantic queries.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +13,12 @@ import yaml
 
 
 class DataCatalog:
-    """Loads table metadata from YAML data-profile configs."""
+    """Loads table metadata from YAML data-profile configs.
+
+    Provides schema information in two formats:
+    - Structured (get_schema): for programmatic use
+    - Prompt context (to_prompt_context): for injection into LLM prompts
+    """
 
     def __init__(self, profile_dir: str = "config/data_profiles"):
         self._profiles: dict[str, dict] = {}
@@ -25,6 +35,7 @@ class DataCatalog:
         return sorted(self._profiles.keys())
 
     def get_schema(self, table_name: str) -> dict | None:
+        """Return column schema: {col_name: {type, description}}."""
         profile = self._profiles.get(table_name)
         if profile is None:
             return None
@@ -42,13 +53,54 @@ class DataCatalog:
             return ""
         return profile.get("description", "")
 
+    def get_column_details(self, table_name: str) -> dict | None:
+        """Return full column details including distribution info.
+        Useful for understanding data ranges and typical values."""
+        profile = self._profiles.get(table_name)
+        if profile is None:
+            return None
+        details: dict[str, dict] = {}
+        for col_name, spec in profile["columns"].items():
+            col_info: dict = {
+                "type": spec["dtype"],
+                "description": spec.get("description", ""),
+            }
+            # Include range/distribution info for context
+            if "min" in spec:
+                col_info["min"] = spec["min"]
+            if "max" in spec:
+                col_info["max"] = spec["max"]
+            if "categories" in spec:
+                col_info["values"] = list(spec["categories"].keys())
+            if "distribution" in spec:
+                col_info["distribution"] = spec["distribution"]
+            details[col_name] = col_info
+        return details
+
     def to_prompt_context(self) -> str:
-        lines: list[str] = []
+        """Format the full catalog as text for injection into LLM prompts.
+
+        This is what specialists see when they need to understand what data
+        is available and what each column means.
+        """
+        lines: list[str] = ["=== DATA CATALOG ===", ""]
         for table in self.list_tables():
             desc = self.get_description(table)
-            lines.append(f"- {table}: {desc}")
-            schema = self.get_schema(table)
-            if schema:
-                for col, info in schema.items():
-                    lines.append(f"    {col} ({info['type']})")
+            lines.append(f"TABLE: {table}")
+            lines.append(f"  {desc}")
+            details = self.get_column_details(table)
+            if details:
+                for col, info in details.items():
+                    if col == "case_id":
+                        continue  # case_id is implicit from context
+                    col_desc = info.get("description", "")
+                    col_type = info["type"]
+                    extras = []
+                    if "values" in info:
+                        extras.append(f"values: {', '.join(info['values'])}")
+                    elif "min" in info and "max" in info:
+                        extras.append(f"range: {info['min']}–{info['max']}")
+                    extra_str = f" ({', '.join(extras)})" if extras else ""
+                    lines.append(f"  - {col} [{col_type}]{extra_str}: {col_desc}")
+            lines.append("")
         return "\n".join(lines)

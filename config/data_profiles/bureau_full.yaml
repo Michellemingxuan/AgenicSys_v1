@@ -1,51 +1,82 @@
 table: bureau_full
-description: "Full bureau credit file, one row per case"
+description: "Full bureau credit file — one row per case, aggregated bureau snapshot"
 row_count: 50
 one_row_per_case: true
+
+# ──────────────────────────────────────────────────────────────────
+# HOW TO MAKE THIS MORE REALISTIC
+# ──────────────────────────────────────────────────────────────────
+# Each column below has tunable knobs. Edit these to match real data:
+#
+#   dtype:         string | int | float | categorical | date
+#   distribution:  normal | poisson | uniform (for int/float)
+#   mean / std:    center and spread (normal distribution)
+#   lambda:        rate parameter (poisson distribution)
+#   min / max:     hard bounds — values are clipped to this range
+#   categories:    {value: probability} — must sum to ~1.0
+#   year:          year or [start_year, end_year] for date columns
+#   description:   human-readable — shown in data catalog for specialists
+#
+# After editing, regenerate: python -m data --output data/simulated/ --seed 42
+# ──────────────────────────────────────────────────────────────────
 
 columns:
   case_id:
     dtype: string
     format: "CASE-{seq:05d}"
+    description: "Unique case identifier"
 
   score:
     dtype: int
     distribution: normal
-    mean: 680
-    std: 75
+    mean: 680                    # TUNE: what is the typical bureau score for cases under review?
+    std: 75                      # TUNE: how spread out are scores? (higher = more variance)
     min: 300
     max: 850
+    description: "Credit bureau score (FICO-like, 300-850)"
 
   derog_count:
     dtype: int
     distribution: poisson
-    lambda: 1.2
+    lambda: 1.2                  # TUNE: average number of derogatory marks per case
     min: 0
     max: 12
+    description: "Number of derogatory marks on bureau file"
 
   tradeline_ct:
     dtype: int
     distribution: normal
-    mean: 12
+    mean: 12                     # TUNE: average active tradelines
     std: 5
     min: 1
     max: 40
+    description: "Number of active tradelines (revolving + installment + mortgage)"
 
   inquiry_ct:
     dtype: int
     distribution: poisson
-    lambda: 2.0
+    lambda: 2.0                  # TUNE: average hard inquiries in last 12 months
     min: 0
     max: 15
+    description: "Hard inquiries in last 12 months"
 
   score_date:
     dtype: date
     year: 2024
+    description: "Date of last bureau score refresh"
 
+# ──────────────────────────────────────────────────────────────────
+# CORRELATIONS — cross-column relationships
+# ──────────────────────────────────────────────────────────────────
+# direction: positive (both go up together) or negative (one up, other down)
+# strength: 0.0 (no effect) to 1.0 (perfect rank correlation)
+#
+# Add new correlations if you know real relationships exist.
+# ──────────────────────────────────────────────────────────────────
 correlations:
   - columns: [score, derog_count]
-    direction: negative
+    direction: negative          # more derogs → lower score
     strength: 0.7
   - columns: [score, tradeline_ct]
-    direction: positive
+    direction: positive          # more tradelines → slightly higher score
     strength: 0.3
