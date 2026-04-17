@@ -1,0 +1,133 @@
+"""General Specialist — cross-domain reviewer with Compare skill."""
+
+from __future__ import annotations
+
+import itertools
+import json
+
+from gateway.firewall_stack import FirewallStack
+from log.event_logger import EventLogger
+from models.types import (
+    Conflict,
+    LLMResult,
+    Resolution,
+    ReviewReport,
+    SpecialistOutput,
+)
+
+
+COMPARE_SYSTEM_PROMPT = (
+    "You are a General Specialist — a cross-domain reviewer who identifies "
+    "contradictions, tensions, and complementary insights across specialist outputs. "
+    "For each pair of specialists, determine whether their findings contradict, "
+    "and if so, attempt to resolve the contradiction using available evidence. "
+    "Respond in JSON with keys: resolved (list of objects with pair, contradiction, "
+    "question_raised, answer, supporting_evidence, conclusion) and open_conflicts "
+    "(list of objects with pair, contradiction, question_raised, reason_unresolved, "
+    "evidence_from_both). Also include cross_domain_insights (list of strings)."
+)
+
+
+class GeneralSpecialist:
+    """Cross-domain reviewer that compares specialist outputs."""
+
+    def __init__(self, firewall: FirewallStack, logger: EventLogger):
+        self.firewall = firewall
+        self.logger = logger
+
+    def compare(
+        self,
+        specialist_outputs: dict[str, SpecialistOutput],
+        question: str,
+    ) -> ReviewReport:
+        if len(specialist_outputs) < 2:
+            return ReviewReport()
+
+        domains = list(specialist_outputs.keys())
+        pairs = self._generate_pairs(domains)
+
+        self.logger.log(
+            "compare_start",
+            {"domains": domains, "pairs": [list(p) for p in pairs], "question": question},
+        )
+
+        prompt_body = self._format_outputs_for_prompt(specialist_outputs)
+        user_message = (
+            f"Question: {question}\n\n"
+            f"Specialist outputs:\n{prompt_body}\n\n"
+            f"Pairs to compare: {[list(p) for p in pairs]}\n\n"
+            "Identify contradictions, attempt resolution, and note cross-domain insights."
+        )
+
+        result = self.firewall.call(
+            system_prompt=COMPARE_SYSTEM_PROMPT,
+            user_message=user_message,
+        )
+
+        report = self._parse_compare_result(result)
+
+        # Log events for each finding
+        for r in report.resolved:
+            self.logger.log("contradiction_found", {"pair": list(r.pair), "resolved": True})
+            self.logger.log("question_raised", {"question": r.question_raised})
+            self.logger.log("self_answer", {"answer": r.answer})
+        for c in report.open_conflicts:
+            self.logger.log("contradiction_found", {"pair": list(c.pair), "resolved": False})
+            self.logger.log("question_raised", {"question": c.question_raised})
+
+        return report
+
+    def _generate_pairs(self, domains: list[str]) -> list[tuple[str, str]]:
+        return list(itertools.combinations(sorted(domains), 2))
+
+    def _format_outputs_for_prompt(
+        self, outputs: dict[str, SpecialistOutput]
+    ) -> str:
+        parts = []
+        for domain, output in outputs.items():
+            parts.append(
+                f"[{domain}]\n"
+                f"Findings: {output.findings}\n"
+                f"Evidence: {', '.join(output.evidence)}\n"
+                f"Implications: {', '.join(output.implications)}\n"
+            )
+        return "\n".join(parts)
+
+    def _parse_compare_result(self, result: LLMResult) -> ReviewReport:
+        if result.status == "blocked" or result.data is None:
+            return ReviewReport()
+
+        data = result.data
+
+        resolved = []
+        for r in data.get("resolved", []):
+            pair = r.get("pair", ["", ""])
+            resolved.append(
+                Resolution(
+                    pair=tuple(pair[:2]) if len(pair) >= 2 else ("", ""),
+                    contradiction=r.get("contradiction", ""),
+                    question_raised=r.get("question_raised", ""),
+                    answer=r.get("answer", ""),
+                    supporting_evidence=r.get("supporting_evidence", []),
+                    conclusion=r.get("conclusion", ""),
+                )
+            )
+
+        open_conflicts = []
+        for c in data.get("open_conflicts", []):
+            pair = c.get("pair", ["", ""])
+            open_conflicts.append(
+                Conflict(
+                    pair=tuple(pair[:2]) if len(pair) >= 2 else ("", ""),
+                    contradiction=c.get("contradiction", ""),
+                    question_raised=c.get("question_raised", ""),
+                    reason_unresolved=c.get("reason_unresolved", ""),
+                    evidence_from_both=c.get("evidence_from_both", []),
+                )
+            )
+
+        return ReviewReport(
+            resolved=resolved,
+            open_conflicts=open_conflicts,
+            cross_domain_insights=data.get("cross_domain_insights", []),
+        )
