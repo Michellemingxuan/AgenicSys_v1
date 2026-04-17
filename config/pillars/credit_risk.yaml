@@ -1,0 +1,27 @@
+pillar: credit_risk
+display_name: "Credit & Risk"
+focus: "Delinquency risk, bureau scores, cross-BU exposure, model scores, spend patterns, WCC flags, capacity & affordability"
+specialists:
+  bureau:
+    focus: "Delinquency Risk"
+    prompt_overlay: "Flag 90D+ Marks"
+  crossbu:
+    focus: "Cross-BU Exposure"
+    prompt_overlay: "Multi-product overlap"
+  modeling:
+    focus: "Score Trajectories"
+    prompt_overlay: "Trend vs threshold"
+  spend_payments:
+    focus: "Payment Behavior"
+    prompt_overlay: "6M rolling trends"
+  wcc:
+    focus: "Watch-list Flags"
+    prompt_overlay: "Standalone signals"
+  customer_rel:
+    focus: "Relationship Depth"
+    prompt_overlay: "Product breadth"
+  capacity_afford:
+    focus: "Capacity Headroom"
+    prompt_overlay: "Limit vs DTI"
+silenced_tables: []
+silenced_columns: {}

@@ -1,0 +1,27 @@
+pillar: cbo
+display_name: "CBO"
+focus: "Customer-level business outcomes, portfolio strategy, revenue impact, retention signals"
+specialists:
+  bureau:
+    focus: "Credit Profile"
+    prompt_overlay: "Score distribution and tradeline health"
+  crossbu:
+    focus: "Product Penetration"
+    prompt_overlay: "Wallet share and cross-sell"
+  modeling:
+    focus: "Propensity Scores"
+    prompt_overlay: "Conversion and attrition likelihood"
+  spend_payments:
+    focus: "Revenue Contribution"
+    prompt_overlay: "Spend velocity and payment reliability"
+  wcc:
+    focus: "Risk Flags"
+    prompt_overlay: "Business impact of flags"
+  customer_rel:
+    focus: "Customer Lifetime Value"
+    prompt_overlay: "Tenure and product depth signals"
+  capacity_afford:
+    focus: "Growth Headroom"
+    prompt_overlay: "Capacity for additional products"
+silenced_tables: []
+silenced_columns: {}

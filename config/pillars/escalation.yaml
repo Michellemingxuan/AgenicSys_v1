@@ -1,0 +1,27 @@
+pillar: escalation
+display_name: "Escalation"
+focus: "Escalation triggers, severity assessment, flag prioritization, risk aggregation across products"
+specialists:
+  bureau:
+    focus: "Bureau Deterioration"
+    prompt_overlay: "Score drops and new derogs"
+  crossbu:
+    focus: "Multi-Product Risk"
+    prompt_overlay: "Aggregate exposure breach"
+  modeling:
+    focus: "Model Alerts"
+    prompt_overlay: "Threshold breaches"
+  spend_payments:
+    focus: "Payment Distress"
+    prompt_overlay: "Missed payment patterns"
+  wcc:
+    focus: "Flag Escalation"
+    prompt_overlay: "Critical and high severity flags"
+  customer_rel:
+    focus: "Tenure Context"
+    prompt_overlay: "Long-term vs new customer risk"
+  capacity_afford:
+    focus: "Affordability Stress"
+    prompt_overlay: "DTI above policy limits"
+silenced_tables: []
+silenced_columns: {}
